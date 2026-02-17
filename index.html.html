@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CSA Safety Dashboard Pro</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .chart-container { position: relative; height: 220px; width: 100%; }
+    th { text-align: left; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+<div class="container mx-auto p-6">
+  <div class="mb-6 flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-800">CSA Safety Dashboard</h1>
+      <p class="text-gray-600">Live Safety Performance Analysis from Book4.csv</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-4 mb-6">
+    <h2 class="font-semibold mb-3">Filters</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-sm font-medium">Company</label>
+        <select id="companyFilter" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Companies</option>
+          <option value="CARGO SOLUTION EXPRESS INC ">Cargo Solution Express</option>
+          <option value="CARGO EXPRESS GEORGIA LLC">Cargo Express Georgia</option>
+          <option value="CARGO EXPRESS TEXAS INC">Cargo Express Texas</option>
+          <option value="CARGO EXPRESS OHIO INC">Cargo Express Ohio</option>
+          <option value="BAL CARRIER INC">BAL Carrier</option>
+          <option value="CARGO SOLUTION OREGON EXPRESS">Cargo Solution Oregon</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm font-medium">BASIC Category</label>
+        <select id="basicFilter" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+          <option value="All">All BASIC</option>
+          <option value="Vehicle Maint.">Vehicle Maintenance</option>
+          <option value="Unsafe Driving">Unsafe Driving</option>
+          <option value="HOS Compliance">HOS Compliance</option>
+          <option value="Driver Fitness">Driver Fitness</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-sm font-medium">OOS Status</label>
+        <select id="oosFilter" class="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Statuses</option>
+          <option value="Yes">Out of Service (OOS)</option>
+          <option value="No">Not OOS</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-2xl shadow p-4 border-l-4 border-blue-500">
+      <h2 class="text-sm text-gray-500 uppercase font-bold">Total Violations</h2>
+      <p id="kpi-violations" class="text-2xl font-bold">0</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4 border-l-4 border-red-600">
+      <h2 class="text-sm text-gray-500 uppercase font-bold">OOS Violations</h2>
+      <p id="kpi-oos" class="text-2xl font-bold text-red-600">0</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4 border-l-4 border-orange-500">
+      <h2 class="text-sm text-gray-500 uppercase font-bold">Total CSA Score</h2>
+      <p id="kpi-score" class="text-2xl font-bold text-orange-600">0</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4 border-l-4 border-green-500">
+      <h2 class="text-sm text-gray-500 uppercase font-bold">Avg Severity</h2>
+      <p id="kpi-avg" class="text-2xl font-bold text-green-600">0</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-2 text-center text-gray-700">BASIC Score Distribution</h2>
+      <div class="chart-container"><canvas id="basicChart"></canvas></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-2 text-center text-gray-700">Company Score Comparison</h2>
+      <div class="chart-container"><canvas id="companyChart"></canvas></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-2 text-center text-gray-700">OOS vs Non-OOS</h2>
+      <div class="chart-container"><canvas id="oosChart"></canvas></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow p-4">
+      <h2 class="font-semibold mb-2 text-center text-gray-700">Violation Severity Trend</h2>
+      <div class="chart-container"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow p-4 overflow-x-auto">
+    <h2 class="font-semibold mb-4">Violation Details</h2>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100">
+        <tr class="text-gray-600">
+          <th class="p-3">Company</th>
+          <th class="p-3">Driver</th>
+          <th class="p-3">BASIC</th>
+          <th class="p-3">Violation</th>
+          <th class="p-3 text-center">Score</th>
+          <th class="p-3 text-center">OOS</th>
+        </tr>
+      </thead>
+      <tbody id="dataTable" class="divide-y divide-gray-100">
+        </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// Data from Book4.csv
+const rawData = [
+  {"Company": "CARGO SOLUTION OREGON EXPRESS", "Driver": "SINGH, SARABJIT #2", "BASIC": "HOS Compliance", "Violation": "Incomplete/Wrong Log", "Score": 15, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "RAMOS, WILLIAM A", "BASIC": "Vehicle Maint.", "Violation": "Suspension", "Score": 21, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "RAMOS, WILLIAM A", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "RAMOS, WILLIAM A", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 24, "OOS": "Yes"},
+  {"Company": "CARGO SOLUTION OREGON EXPRESS", "Driver": "SINGH, JOBANPREET", "BASIC": "HOS Compliance", "Violation": "Other Log/Form & Manner", "Score": 3, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "MENDOZA, ARMANDO", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS OHIO INC", "Driver": "BARAKHOEV, ISMAIL", "BASIC": "Vehicle Maint.", "Violation": "Tires", "Score": 24, "OOS": "No"},
+  {"Company": "CARGO EXPRESS TEXAS INC", "Driver": "ZHALGASBAYEV, NURBOL", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS TEXAS INC", "Driver": "ZHALGASBAYEV, NURBOL", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "MEDINA, EDWIN R", "BASIC": "Vehicle Maint.", "Violation": "Tires", "Score": 24, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "MEDINA, EDWIN R", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO EXPRESS TEXAS INC", "Driver": "VAKHIDOV, KHURSHED", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 18, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "MURADYAN, SHALVA", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "MURADYAN, SHALVA", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "MURADYAN, SHALVA", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "MURADYAN, SHALVA", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "BAL CARRIER INC", "Driver": "ZOKIROV, MANUCHEKHR", "BASIC": "Vehicle Maint.", "Violation": "Fuel Systems", "Score": 21, "OOS": "No"},
+  {"Company": "BAL CARRIER INC", "Driver": "ZOKIROV, MANUCHEKHR", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "CHAVEZ, GERARDO", "BASIC": "Vehicle Maint.", "Violation": "Coupling Devices", "Score": 9, "OOS": "No"},
+  {"Company": "CARGO EXPRESS OHIO INC", "Driver": "PIRMATOV, AZAMAT", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO EXPRESS OHIO INC", "Driver": "PIRMATOV, AZAMAT", "BASIC": "Vehicle Maint.", "Violation": "Tires", "Score": 24, "OOS": "Yes"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "SAIDOV, AKMAL", "BASIC": "Vehicle Maint.", "Violation": "Tires", "Score": 24, "OOS": "Yes"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "GARCIA, JORGE L", "BASIC": "HOS Compliance", "Violation": "Incomplete/Wrong Log", "Score": 21, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "GARCIA, JORGE L", "BASIC": "Unsafe Driving", "Violation": "Speeding", "Score": 30, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "CHANKSELIANI, DAVID", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "CHANKSELIANI, DAVID", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS TEXAS INC", "Driver": "KHURRAMOV, DAVRON", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS TEXAS INC", "Driver": "KHURRAMOV, DAVRON", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "BAL CARRIER INC", "Driver": "MIRSALIMOV, FARKHOD", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 18, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "VALADEZ, MANUEL", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "VALADEZ, MANUEL", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO SOLUTION OREGON EXPRESS", "Driver": "SINGH, HARKAMAL", "BASIC": "HOS Compliance", "Violation": "Incomplete/Wrong Log", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "ALVARADO, CARLOS M", "BASIC": "Unsafe Driving", "Violation": "Speeding", "Score": 12, "OOS": "No"},
+  {"Company": "CARGO EXPRESS OHIO INC", "Driver": "DADASHOV, ELVIN", "BASIC": "Driver Fitness", "Violation": "Medical Certificate", "Score": 3, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "GARCIA, ANDRES J", "BASIC": "Unsafe Driving", "Violation": "Speeding", "Score": 30, "OOS": "No"},
+  {"Company": "CARGO SOLUTION EXPRESS INC ", "Driver": "GARCIA, ANDRES J", "BASIC": "Unsafe Driving", "Violation": "Speeding", "Score": 18, "OOS": "No"},
+  {"Company": "CARGO EXPRESS OHIO INC", "Driver": "IBROKHIMOV, KOMIL", "BASIC": "Vehicle Maint.", "Violation": "Lighting", "Score": 6, "OOS": "No"},
+  {"Company": "CARGO SOLUTION OREGON EXPRESS", "Driver": "SINGH, JATINDER", "BASIC": "Vehicle Maint.", "Violation": "Tires", "Score": 24, "OOS": "Yes"},
+  {"Company": "CARGO EXPRESS GEORGIA LLC", "Driver": "OROZBAEV, KANYBEK", "BASIC": "Vehicle Maint.", "Violation": "Brakes, All Others", "Score": 12, "OOS": "Yes"}
+];
+
+let charts = {};
+
+function initCharts() {
+  const commonOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } };
+
+  charts.basic = new Chart(document.getElementById('basicChart'), { type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'] }] }, options: commonOptions });
+  charts.company = new Chart(document.getElementById('companyChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Score', data: [], backgroundColor: '#6366f1' }] }, options: commonOptions });
+  charts.oos = new Chart(document.getElementById('oosChart'), { type: 'pie', data: { labels: ['OOS', 'Non-OOS'], datasets: [{ data: [0, 0], backgroundColor: ['#b91c1c', '#94a3b8'] }] }, options: commonOptions });
+  charts.trend = new Chart(document.getElementById('trendChart'), { type: 'line', data: { labels: [], datasets: [{ label:'Violation Severity', data:[], borderColor: '#f97316', tension: 0.3 }] }, options: commonOptions });
+}
+
+function updateDashboard() {
+  const compFilter = document.getElementById('companyFilter').value;
+  const basicFilter = document.getElementById('basicFilter').value;
+  const oosFilter = document.getElementById('oosFilter').value;
+
+  const filtered = rawData.filter(d => {
+    return (compFilter === 'All' || d.Company === compFilter) &&
+           (basicFilter === 'All' || d.BASIC === basicFilter) &&
+           (oosFilter === 'All' || d.OOS === oosFilter);
+  });
+
+  // Update KPIs
+  document.getElementById('kpi-violations').innerText = filtered.length;
+  document.getElementById('kpi-oos').innerText = filtered.filter(d => d.OOS === 'Yes').length;
+  const totalScore = filtered.reduce((acc, d) => acc + d.Score, 0);
+  document.getElementById('kpi-score').innerText = totalScore;
+  document.getElementById('kpi-avg').innerText = filtered.length ? (totalScore / filtered.length).toFixed(1) : 0;
+
+  // Update Table
+  const tbody = document.getElementById('dataTable');
+  tbody.innerHTML = filtered.map(d => `
+    <tr>
+      <td class="p-3">${d.Company.replace('CARGO ', '')}</td>
+      <td class="p-3">${d.Driver}</td>
+      <td class="p-3">${d.BASIC}</td>
+      <td class="p-3 text-gray-500">${d.Violation}</td>
+      <td class="p-3 text-center font-bold">${d.Score}</td>
+      <td class="p-3 text-center ${d.OOS === 'Yes' ? 'text-red-600 font-bold' : ''}">${d.OOS}</td>
+    </tr>
+  `).join('');
+
+  // Update Charts
+  updateBasicChart(filtered);
+  updateCompanyChart(filtered);
+  updateOOSChart(filtered);
+  updateTrendChart(filtered);
+}
+
+function updateBasicChart(data) {
+  const counts = data.reduce((acc, d) => { acc[d.BASIC] = (acc[d.BASIC] || 0) + d.Score; return acc; }, {});
+  charts.basic.data.labels = Object.keys(counts);
+  charts.basic.data.datasets[0].data = Object.values(counts);
+  charts.basic.update();
+}
+
+function updateCompanyChart(data) {
+  const counts = data.reduce((acc, d) => { 
+    const shortName = d.Company.split(' ')[2] || 'CSE';
+    acc[shortName] = (acc[shortName] || 0) + d.Score; 
+    return acc; 
+  }, {});
+  charts.company.data.labels = Object.keys(counts);
+  charts.company.data.datasets[0].data = Object.values(counts);
+  charts.company.update();
+}
+
+function updateOOSChart(data) {
+  const oos = data.filter(d => d.OOS === 'Yes').length;
+  charts.oos.data.datasets[0].data = [oos, data.length - oos];
+  charts.oos.update();
+}
+
+function updateTrendChart(data) {
+  // Using index as simple trend proxy for this static set
+  charts.trend.data.labels = data.map((_, i) => i + 1);
+  charts.trend.data.datasets[0].data = data.map(d => d.Score);
+  charts.trend.update();
+}
+
+// Event Listeners
+document.querySelectorAll('select').forEach(s => s.addEventListener('change', updateDashboard));
+
+// Initialize
+initCharts();
+updateDashboard();
+</script>
+
+</body>
+</html>
